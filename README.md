@@ -1,105 +1,85 @@
-# 🧯 FEMCS — Fire Extinguisher Management and Compliance System
+# Fire Extinguisher Management System
 
-A microservices-based system to track fire extinguishers, monitor expiration and maintenance dates, send automated reminders, schedule inspections, and ensure compliance with fire safety regulations.
-
----
-
-## Architecture
-
-```
-┌─────────────┐     ┌──────────────────────────────────────────────────────┐
-│   Frontend  │────▶│                   API Gateway :5000                  │
-│  React :3000│     └──────┬──────────┬──────────┬──────────┬──────────────┘
-└─────────────┘            │          │          │          │
-                    :5001  │   :5002  │   :5003  │   :5004  │  :5005
-              auth-service │ customer │extinguish│notificat.│ report
-                           │ -service │ -service │ -service │ -service
-                           └──────────┴──────────┴──────────┴──────────────┘
-                                              │
-                                       PostgreSQL :5432
-```
+This project is a RESTful microservices-based Fire Extinguisher Management System aligned to the `Fire_Extinguisher_Template/system.md` brief. It covers user management, JWT authentication, role-based authorization, extinguisher registration, inspection scheduling, maintenance logging, notifications, and reporting with CSV/PDF export.
 
 ## Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| `api-gateway` | 5000 | Reverse proxy, rate limiting, Swagger docs |
-| `auth-service` | 5001 | Authentication, JWT, user management |
-| `entry-service` (customer) | 5002 | Customer registration and management |
-| `extinguisher-service` | 5003 | Extinguisher CRUD, inspections, maintenance |
-| `notification-service` | 5004 | In-app + email notifications, escalations, cron scheduler |
-| `report-service` | 5005 | Reports (expired, compliance, audit) with CSV export |
-| `frontend` | 3000 | React dashboard |
+- `api-gateway` on `5000`: routing, rate limiting, Swagger docs
+- `auth-service` on `5001`: registration, login, profile, password recovery
+- `entry-service` on `5002`: facility/customer registry used to associate extinguishers with sites
+- `extinguisher-service` on `5003`: extinguisher CRUD, inspections, maintenance
+- `notification-service` on `5004`: reminders, escalations, email notifications
+- `report-service` on `5005`: inventory, inspection, compliance, maintenance, audit reports
+- `frontend` on `3000`: React dashboard
 
-## Quick Start
+## Required Roles
 
-### With Docker Compose
+- `admin`
+- `inspector`
+- `user`
 
-```bash
-# Copy and configure environment
-cp api-gateway/.env.example api-gateway/.env
-cp services/auth-service/.env.example services/auth-service/.env
-cp services/entry-service/.env.example services/entry-service/.env
-cp services/extinguisher-service/.env.example services/extinguisher-service/.env
-cp services/notification-service/.env.example services/notification-service/.env
-cp services/report-service/.env.example services/report-service/.env
+## Extinguisher Model
 
-# Start everything
-docker-compose up --build
-```
+Supported required extinguisher fields:
 
-### Manual (Development)
+- serial number
+- location
+- type: `Water`, `CO2`, `Foam`, `Dry Chemical`
+- size: `2.5 lb`, `5 lb`, `9 lb`, `12 lb`
+- installation date
+- expiry date
+- status
 
-```bash
-# Start each service
-cd services/auth-service && npm install && npm run dev
-cd services/entry-service && npm install && npm run dev
-cd services/extinguisher-service && npm install && npm run dev
-cd services/notification-service && npm install && npm run dev
-cd services/report-service && npm install && npm run dev
-cd api-gateway && npm install && npm run dev
-cd frontend && npm install && npm start
-```
-
-### Database
-
-```bash
-psql -U femcs -d femcs_db -f schema.sql
-```
-
-## Default Login
-
-- **Email:** admin@femcs.rw
-- **Password:** Admin@1234
-
-## API Docs
-
-Visit `http://localhost:5000/api/docs` after starting the gateway.
-
-## Features
-
-- ✅ Customer management (FR1)
-- ✅ Fire extinguisher registration (FR2)
-- ✅ Inventory dashboard with stats (FR3)
-- ✅ Automatic expiry monitoring — 90/60/30/7 day alerts (FR4)
-- ✅ Inspection management with pass/fail/requires service (FR5)
-- ✅ Maintenance scheduling and tracking (FR6)
-- ✅ In-app + email notifications (FR7)
-- ✅ 5-stage escalation system (FR8)
-- ✅ Reports: expired, expiring, customers, inspections, maintenance, compliance — CSV export (FR9)
-- ✅ Full audit trail (FR10)
-- ✅ Roles: admin, technician, inspector, safety_officer
-- ✅ Responsive React frontend with dark theme
+The project keeps the existing facility registry so each extinguisher is attached to a site/building owner record.
 
 ## Email Configuration
 
-Set SMTP credentials in `services/notification-service/.env`:
+The services now support either `MAIL_*` or legacy `SMTP_*` variables. Use `.env` files per service and keep real credentials out of source control.
+
+Example:
 
 ```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_SECURE=false
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_password
+EMAIL_FROM=Fire Extinguisher System <noreply@fems.local>
 ```
 
-If credentials are not set, email sending is skipped gracefully — in-app notifications still work.
+## Main API Coverage
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/validate`
+- `GET /api/auth/me`
+- `PATCH /api/auth/profile`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+- `POST /api/auth/change-password`
+- `GET|POST|PUT|DELETE /api/extinguishers`
+- `GET|POST /api/inspections`
+- `GET|POST /api/maintenance`
+- `GET /api/reports/expired`
+- `GET /api/reports/expiring-soon`
+- `GET /api/reports/compliance`
+- `GET /api/reports/inventory/summary`
+- `GET /api/reports/inspections/status-summary`
+- `GET /api/reports/maintenance/frequency`
+
+## Build and Checks Run
+
+Executed in this workspace:
+
+- `node --check` on modified backend route files
+- `npm install` in `frontend`
+- `npm run build` in `frontend`
+- `schema.sql`, `migrate.sql`, and `seed.sql` applied to local `femcs_db`
+- database connectivity verified from `auth-service`, `entry-service`, `extinguisher-service`, `notification-service`, and `report-service`
+
+## Notes
+
+- Database changes are reflected in `schema.sql`, incremental updates in `migrate.sql`, and starter data in `seed.sql`.
+- The frontend report screen now exports both CSV and PDF.
+- The inspection workflow now supports scheduling with date and time.
