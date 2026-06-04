@@ -1,16 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { notificationAPI, authAPI } from '../services/api';
+import React, { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, Flame, ClipboardCheck, Wrench,
-  Bell, BarChart3, LogOut, ShieldAlert, Menu, X, FileText, KeyRound
+  BarChart3,
+  Bell,
+  ClipboardCheck,
+  FlameKindling,
+  FileText,
+  Flame,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  ShieldAlert,
+  Users,
+  Wrench,
+  X,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useAuth } from '../context/AuthContext';
+import { authAPI, notificationAPI } from '../services/api';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/customers', label: 'Customers', icon: Users },
+  { path: '/customers', label: 'Facilities', icon: Users },
   { path: '/extinguishers', label: 'Extinguishers', icon: Flame },
   { path: '/inspections', label: 'Inspections', icon: ClipboardCheck },
   { path: '/maintenance', label: 'Maintenance', icon: Wrench },
@@ -23,7 +35,7 @@ const adminItems = [
 ];
 
 export default function Layout() {
-  const { user, logout, isAdmin, isSafetyOfficer } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -48,43 +60,45 @@ export default function Layout() {
   async function fetchNotifications() {
     try {
       const res = await notificationAPI.list({ limit: 15 });
-      setNotifications(res.data.data);
-      setUnreadCount(res.data.unreadCount);
+      setNotifications(res.data.data || []);
+      setUnreadCount(res.data.unreadCount || 0);
     } catch {}
   }
 
   async function handleMarkRead(id) {
     try {
       await notificationAPI.markRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, isRead: true } : item)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch {}
   }
 
   async function handleMarkAllRead() {
     try {
       await notificationAPI.markAllRead();
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
       setUnreadCount(0);
     } catch {}
   }
 
-  const handleLogout = () => {
-    logout();
+  async function handleLogout() {
+    await logout();
     navigate('/login');
-  };
+  }
 
-  const handleChangePassword = async (e) => {
+  async function handleChangePassword(e) {
     e.preventDefault();
     setPwErrors([]);
     if (pwForm.newPassword !== pwForm.confirmPassword) {
       setPwErrors(['New passwords do not match']);
       return;
     }
+
     setPwLoading(true);
     try {
       await authAPI.changePassword({ currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword });
-      import('react-hot-toast').then(({ default: toast }) => toast.success('Password changed successfully'));
+      const toast = (await import('react-hot-toast')).default;
+      toast.success('Password changed successfully');
       setChangePwModal(false);
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
@@ -93,49 +107,46 @@ export default function Layout() {
     } finally {
       setPwLoading(false);
     }
-  };
+  }
 
-  const pageTitle = [...navItems, ...adminItems].find(i => location.pathname.startsWith(i.path))?.label || 'FEMCS';
+  const pageTitle = [...navItems, ...adminItems].find((item) => location.pathname.startsWith(item.path))?.label || 'Fire Extinguisher System';
 
   return (
     <div className="layout">
-      {/* Sidebar overlay for mobile */}
-      <div
-        className={`sidebar-overlay ${sidebarOpen ? '' : 'hidden'}`}
-        onClick={() => setSidebarOpen(false)}
-      />
+      <div className={`sidebar-overlay ${sidebarOpen ? '' : 'hidden'}`} onClick={() => setSidebarOpen(false)} />
 
-      {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
-          <h2>🧯 FEMCS</h2>
-          <span>Fire Extinguisher Management</span>
+          <div className="sidebar-brand">
+            <div className="brand-mark">
+              <FlameKindling size={22} />
+            </div>
+            <div>
+              <h2>FEMCS</h2>
+              <span>Fire Extinguisher Command</span>
+            </div>
+          </div>
+          <div className="sidebar-note">
+            Live inventory, inspection cadence, and compliance follow-up in one operational console.
+          </div>
         </div>
 
         <nav className="sidebar-nav">
           <div className="nav-section">
             <div className="nav-section-label">Main</div>
-            {navItems.map(item => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              >
+            {navItems.map((item) => (
+              <NavLink key={item.path} to={item.path} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                 <item.icon size={16} />
                 {item.label}
               </NavLink>
             ))}
           </div>
 
-          {(isAdmin || isSafetyOfficer) && (
+          {isAdmin && (
             <div className="nav-section">
               <div className="nav-section-label">Management</div>
-              {adminItems.map(item => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                >
+              {adminItems.map((item) => (
+                <NavLink key={item.path} to={item.path} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                   <item.icon size={16} />
                   {item.label}
                 </NavLink>
@@ -146,12 +157,10 @@ export default function Layout() {
 
         <div className="sidebar-footer">
           <div className="user-chip">
-            <div className="user-avatar">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </div>
+            <div className="user-avatar">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>
             <div className="user-info">
               <strong>{user?.firstName} {user?.lastName}</strong>
-              <small>{user?.role?.replace('_', ' ')}</small>
+              <small>{user?.role}</small>
             </div>
             <button className="logout-btn" title="Change password" onClick={() => setChangePwModal(true)} style={{ marginRight: 2 }}>
               <KeyRound size={14} />
@@ -163,39 +172,36 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="main-content">
         <header className="topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
               {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <h1>{pageTitle}</h1>
+            <div className="topbar-title">
+              <h1>{pageTitle}</h1>
+              <p>Fire safety operations and extinguisher compliance tracking</p>
+            </div>
           </div>
           <div className="topbar-actions">
+            <div className="role-pill">
+              <Flame size={14} />
+              {user?.role || 'user'}
+            </div>
             <button className="notif-bell" onClick={() => setNotifOpen(!notifOpen)}>
               <Bell size={18} />
-              {unreadCount > 0 && (
-                <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-              )}
+              {unreadCount > 0 && <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </button>
           </div>
         </header>
 
-        {/* Notification panel */}
         {notifOpen && (
           <div className="notif-panel">
             <div className="notif-panel-header">
               <h3>Notifications {unreadCount > 0 && <span className="badge badge-red" style={{ marginLeft: 8 }}>{unreadCount}</span>}</h3>
               <div style={{ display: 'flex', gap: 8 }}>
-                {unreadCount > 0 && (
-                  <button className="btn btn-sm btn-secondary" onClick={handleMarkAllRead}>
-                    Mark all read
-                  </button>
-                )}
-                <button className="btn-icon" onClick={() => setNotifOpen(false)}>
-                  <X size={14} />
-                </button>
+                {unreadCount > 0 && <button className="btn btn-sm btn-secondary" onClick={handleMarkAllRead}>Mark all read</button>}
+                <button className="btn-icon" onClick={() => setNotifOpen(false)}><X size={14} /></button>
               </div>
             </div>
             <div className="notif-list">
@@ -205,17 +211,11 @@ export default function Layout() {
                   <p>No notifications</p>
                 </div>
               ) : (
-                notifications.map(n => (
-                  <div
-                    key={n.id}
-                    className={`notif-item ${!n.isRead ? `unread ${n.type}` : ''}`}
-                    onClick={() => !n.isRead && handleMarkRead(n.id)}
-                  >
-                    <div className="notif-item-title">{n.title}</div>
-                    <div className="notif-item-msg">{n.message}</div>
-                    <div className="notif-item-time">
-                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
-                    </div>
+                notifications.map((notification) => (
+                  <div key={notification.id} className={`notif-item ${!notification.isRead ? `unread ${notification.type}` : ''}`} onClick={() => !notification.isRead && handleMarkRead(notification.id)}>
+                    <div className="notif-item-title">{notification.title}</div>
+                    <div className="notif-item-msg">{notification.message}</div>
+                    <div className="notif-item-time">{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</div>
                   </div>
                 ))
               )}
@@ -228,46 +228,41 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* Change Password Modal */}
       {changePwModal && (
         <div className="modal-overlay" onClick={() => setChangePwModal(false)}>
-          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3><KeyRound size={16} style={{ marginRight: 8, verticalAlign: 'middle' }} />Change Password</h3>
               <button className="btn-icon" onClick={() => setChangePwModal(false)}><X size={16} /></button>
             </div>
             <form onSubmit={handleChangePassword}>
               <div className="modal-body">
-                {pwErrors.length > 0 && (
-                  <div className="alert alert-error">
-                    {pwErrors.map((e, i) => <div key={i}>{e}</div>)}
-                  </div>
-                )}
+                {pwErrors.length > 0 && <div className="alert alert-error">{pwErrors.map((err, index) => <div key={index}>{err}</div>)}</div>}
                 <div className="form-group">
                   <label className="form-label">Current Password *</label>
-                  <input type="password" className="form-control" value={pwForm.currentPassword}
-                    onChange={e => setPwForm({ ...pwForm, currentPassword: e.target.value })} required autoFocus />
+                  <input type="password" className="form-control" value={pwForm.currentPassword} onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })} required autoFocus />
                 </div>
                 <div className="form-group">
                   <label className="form-label">New Password *</label>
-                  <input type="password" className="form-control" value={pwForm.newPassword}
-                    onChange={e => setPwForm({ ...pwForm, newPassword: e.target.value })} required
-                    placeholder="Min. 8 chars, upper, lower, number, special" />
+                  <input type="password" className="form-control" value={pwForm.newPassword} onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })} required placeholder="Min. 8 chars, upper, lower, number, special" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Confirm New Password *</label>
-                  <input type="password" className="form-control" value={pwForm.confirmPassword}
-                    onChange={e => setPwForm({ ...pwForm, confirmPassword: e.target.value })} required
-                    style={{ borderColor: pwForm.confirmPassword ? pwForm.newPassword === pwForm.confirmPassword ? 'var(--success)' : 'var(--danger)' : undefined }} />
-                  {pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && (
-                    <div className="form-error">Passwords do not match</div>
-                  )}
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={pwForm.confirmPassword}
+                    onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
+                    required
+                    style={{ borderColor: pwForm.confirmPassword ? pwForm.newPassword === pwForm.confirmPassword ? 'var(--success)' : 'var(--danger)' : undefined }}
+                  />
+                  {pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && <div className="form-error">Passwords do not match</div>}
                 </div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setChangePwModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={pwLoading || pwForm.newPassword !== pwForm.confirmPassword}>
-                  {pwLoading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Change Password'}
+                  {pwLoading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : 'Change Password'}
                 </button>
               </div>
             </form>

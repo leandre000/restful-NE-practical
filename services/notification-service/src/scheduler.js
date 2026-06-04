@@ -2,10 +2,11 @@ const cron = require('node-cron');
 const db = require('./db');
 const { sendEmail, buildExpiryEmailHtml } = require('./mailer');
 
-const EXPIRY_THRESHOLDS = [90, 60, 30, 7]; // days
+const EXPIRY_THRESHOLDS = [90, 60, 30, 7];
+const ALERT_ROLES = ['admin', 'inspector'];
 
 async function checkExpiryAndNotify() {
-  console.log('⏰ Running expiry check scheduler...');
+  console.log('Running expiry check scheduler...');
 
   for (const days of EXPIRY_THRESHOLDS) {
     const result = await db.query(
@@ -32,9 +33,9 @@ async function checkExpiryAndNotify() {
       const title = `Expiry Alert: ${row.extinguisher_code} expires in ${daysLeft} days`;
       const message = `Fire extinguisher ${row.extinguisher_code} (S/N: ${row.serial_number}) at ${row.location} will expire on ${new Date(row.expiry_date).toLocaleDateString()}. ${daysLeft} days remaining.`;
 
-      // Create in-app notification for all admin/safety_officer users
       const adminUsers = await db.query(
-        `SELECT id FROM users WHERE role IN ('admin', 'safety_officer') AND is_active = true`
+        `SELECT id FROM users WHERE role = ANY($1) AND is_active = true`,
+        [ALERT_ROLES]
       );
 
       for (const user of adminUsers.rows) {
@@ -45,7 +46,6 @@ async function checkExpiryAndNotify() {
         );
       }
 
-      // Send email to customer if they have an email
       if (row.customer_email) {
         try {
           const html = buildExpiryEmailHtml({
@@ -56,7 +56,7 @@ async function checkExpiryAndNotify() {
             expiryDate: new Date(row.expiry_date).toLocaleDateString(),
             daysLeft,
           });
-          await sendEmail({ to: row.customer_email, subject: `[FEMCS] ${title}`, html });
+          await sendEmail({ to: row.customer_email, subject: `[Fire Extinguisher System] ${title}`, html });
           await db.query(
             `UPDATE notifications SET email_sent = true, email_sent_at = NOW()
              WHERE extinguisher_id = $1 AND type = 'expiry_alert' AND days_until_expiry = $2
@@ -68,11 +68,10 @@ async function checkExpiryAndNotify() {
         }
       }
 
-      console.log(`📧 Notification created for ${row.extinguisher_code} (${daysLeft} days to expiry)`);
+      console.log(`Notification created for ${row.extinguisher_code} (${daysLeft} days to expiry)`);
     }
   }
 
-  // Mark expired extinguishers
   await db.query(
     `UPDATE extinguishers SET status = 'expired', compliance_status = 'non_compliant'
      WHERE expiry_date < NOW() AND status NOT IN ('decommissioned', 'expired')`
@@ -80,9 +79,8 @@ async function checkExpiryAndNotify() {
 }
 
 async function checkEscalations() {
-  console.log('⚠️  Running escalation check...');
+  console.log('Running escalation check...');
 
-  // Find extinguishers that are expired and have no recent escalation
   const expired = await db.query(`
     SELECT e.id, e.extinguisher_code, e.expiry_date,
            c.id AS customer_id, c.full_name AS customer_name, c.email AS customer_email,
@@ -100,7 +98,7 @@ async function checkEscalations() {
     const stageMessages = {
       1: 'Reminder: Your fire extinguisher has expired. Please take immediate action.',
       2: 'URGENT WARNING: Expired extinguisher poses a safety risk. Immediate replacement required.',
-      3: 'SAFETY OFFICER ALERT: Compliance violation detected. Escalated to safety officer.',
+      3: 'INSPECTOR ALERT: Compliance violation detected. Escalated for further action.',
       4: 'REGULATORY NOTICE: This case has been escalated to the regulatory authority.',
       5: 'COMPLIANCE CASE CREATED: A formal compliance case has been opened for this violation.',
     };
@@ -111,35 +109,39 @@ async function checkEscalations() {
       [row.id, row.customer_id, nextStage, stageMessages[nextStage]]
     );
 
-    // In-app notification for admins
     const adminUsers = await db.query(
-      `SELECT id FROM users WHERE role IN ('admin', 'safety_officer') AND is_active = true`
+      `SELECT id FROM users WHERE role = ANY($1) AND is_active = true`,
+      [ALERT_ROLES]
     );
+
     for (const user of adminUsers.rows) {
       await db.query(
         `INSERT INTO notifications (customer_id, extinguisher_id, user_id, type, title, message, escalation_stage)
          VALUES ($1,$2,$3,'escalation',$4,$5,$6)`,
-        [row.customer_id, row.id, user.id,
-          `Escalation Stage ${nextStage}: ${row.extinguisher_code}`,
-          stageMessages[nextStage], nextStage]
+        [row.customer_id, row.id, user.id, `Escalation Stage ${nextStage}: ${row.extinguisher_code}`, stageMessages[nextStage], nextStage]
       );
     }
 
-    console.log(`🚨 Escalation stage ${nextStage} created for ${row.extinguisher_code}`);
+    console.log(`Escalation stage ${nextStage} created for ${row.extinguisher_code}`);
+  }
+}
+
+async function runSafe(taskName, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`${taskName} failed:`, err.message);
   }
 }
 
 function startScheduler() {
-  // Run expiry check every day at 8:00 AM
-  cron.schedule('0 8 * * *', checkExpiryAndNotify);
-  // Run escalation check every day at 9:00 AM
-  cron.schedule('0 9 * * *', checkEscalations);
+  cron.schedule('0 8 * * *', () => runSafe('Expiry check scheduler', checkExpiryAndNotify));
+  cron.schedule('0 9 * * *', () => runSafe('Escalation scheduler', checkEscalations));
 
-  console.log('📅 Notification scheduler started (daily at 8AM & 9AM)');
+  console.log('Notification scheduler started (daily at 8AM & 9AM)');
 
-  // Run immediately on startup in development
   if (process.env.NODE_ENV === 'development') {
-    setTimeout(checkExpiryAndNotify, 3000);
+    setTimeout(() => runSafe('Startup expiry check', checkExpiryAndNotify), 3000);
   }
 }
 

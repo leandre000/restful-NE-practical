@@ -5,74 +5,78 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const VALID_STATUSES = ['Scheduled', 'Completed', 'Requires Service', 'Failed'];
 
 function today() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const value = new Date();
+  value.setHours(0, 0, 0, 0);
+  return value;
 }
 
-function parseDate(str) {
-  const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d;
+function parseDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-// ── Schema ────────────────────────────────────────────────────────────────────
+function formatInspection(row) {
+  return {
+    id: row.id,
+    extinguisherId: row.extinguisher_id,
+    extinguisherCode: row.extinguisher_code,
+    inspectorId: row.inspector_id,
+    inspectorName: row.inspector_name,
+    inspectionDate: row.inspection_date,
+    inspectionTime: row.inspection_time,
+    findings: row.findings,
+    status: row.status,
+    nextInspectionDate: row.next_inspection_date,
+    createdAt: row.created_at,
+  };
+}
 
 const inspectionSchema = Joi.object({
   extinguisherId: Joi.string().uuid().required()
     .messages({ 'string.guid': 'Extinguisher ID must be a valid UUID' }),
-
   inspectorName: Joi.string()
-    .pattern(/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-\.]{2,200}$/)
+    .pattern(/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-.]{2,200}$/)
     .required()
     .messages({ 'string.pattern.base': 'Inspector name must contain only letters, spaces, hyphens or apostrophes' }),
-
   inspectionDate: Joi.string().isoDate().required(),
-
+  inspectionTime: Joi.string().pattern(/^([01]\d|2[0-3]):([0-5]\d)$/).optional().allow('', null)
+    .messages({ 'string.pattern.base': 'Inspection time must be in HH:mm format' }),
   findings: Joi.string().min(5).max(2000).optional().allow('', null)
     .messages({ 'string.min': 'Findings must be at least 5 characters if provided' }),
-
-  status: Joi.string().valid('Passed', 'Requires Service', 'Failed').required()
-    .messages({ 'any.only': 'Status must be one of: Passed, Requires Service, Failed' }),
-
+  status: Joi.string().valid(...VALID_STATUSES).required(),
   nextInspectionDate: Joi.string().isoDate().optional().allow('', null),
 });
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-
-// POST / — Record inspection
 router.post('/', authenticate, async (req, res) => {
   const { error, value } = inspectionSchema.validate(req.body, { abortEarly: false });
   if (error) {
     return res.status(400).json({
       success: false,
       message: 'Validation failed',
-      errors: error.details.map(d => d.message),
+      errors: error.details.map((d) => d.message),
     });
   }
 
-  const { extinguisherId, inspectorName, inspectionDate, findings, status, nextInspectionDate } = value;
-
-  // ── Business date rules ──────────────────────────────────────────────────
-  const dateErrors = [];
+  const { extinguisherId, inspectorName, inspectionDate, inspectionTime, findings, status, nextInspectionDate } = value;
   const now = today();
-  const inspDate = parseDate(inspectionDate);
+  const inspectionDay = parseDate(inspectionDate);
+  const dateErrors = [];
 
-  // Inspection date cannot be in the future
-  if (inspDate && inspDate > now) {
-    dateErrors.push('Inspection date cannot be in the future');
+  if (status === 'Scheduled' && inspectionDay && inspectionDay < now) {
+    dateErrors.push('Scheduled inspection date must be today or in the future');
   }
 
-  // Next inspection date must be strictly after inspection date
+  if (status !== 'Scheduled' && inspectionDay && inspectionDay > now) {
+    dateErrors.push('Completed inspection date cannot be in the future');
+  }
+
   if (nextInspectionDate) {
     const nextDate = parseDate(nextInspectionDate);
-    if (nextDate && inspDate && nextDate <= inspDate) {
+    if (nextDate && inspectionDay && nextDate <= inspectionDay) {
       dateErrors.push('Next inspection date must be after the inspection date');
-    }
-    if (nextDate && nextDate <= now) {
-      dateErrors.push('Next inspection date must be a future date');
     }
   }
 
@@ -80,7 +84,6 @@ router.post('/', authenticate, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Date validation failed', errors: dateErrors });
   }
 
-  // ── Extinguisher exists ──────────────────────────────────────────────────
   const extCheck = await db.query(
     'SELECT id, expiry_date, manufacture_date FROM extinguishers WHERE id = $1',
     [extinguisherId]
@@ -90,21 +93,18 @@ router.post('/', authenticate, async (req, res) => {
   }
 
   const ext = extCheck.rows[0];
-
-  // Inspection date must be after manufacture date
-  const mfgDate = parseDate(ext.manufacture_date);
-  if (mfgDate && inspDate && inspDate < mfgDate) {
+  const manufactureDate = parseDate(ext.manufacture_date);
+  if (manufactureDate && inspectionDay && inspectionDay < manufactureDate) {
     return res.status(400).json({
       success: false,
       message: 'Inspection date cannot be before the extinguisher manufacture date',
     });
   }
 
-  // Next inspection must be before expiry
   if (nextInspectionDate && ext.expiry_date) {
     const nextDate = parseDate(nextInspectionDate);
-    const expDate = parseDate(ext.expiry_date);
-    if (nextDate && expDate && nextDate >= expDate) {
+    const expiryDate = parseDate(ext.expiry_date);
+    if (nextDate && expiryDate && nextDate >= expiryDate) {
       return res.status(400).json({
         success: false,
         message: 'Next inspection date must be before the extinguisher expiry date',
@@ -112,56 +112,63 @@ router.post('/', authenticate, async (req, res) => {
     }
   }
 
-  // ── Insert ───────────────────────────────────────────────────────────────
   const result = await db.query(
     `INSERT INTO inspections
-       (extinguisher_id, inspector_id, inspector_name, inspection_date, findings, status, next_inspection_date, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [extinguisherId, req.user.id, inspectorName, inspectionDate,
-      findings || null, status, nextInspectionDate || null, req.user.id]
+       (extinguisher_id, inspector_id, inspector_name, inspection_date, inspection_time, findings, status, next_inspection_date, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING *`,
+    [
+      extinguisherId,
+      req.user.id,
+      inspectorName,
+      inspectionDate,
+      inspectionTime || null,
+      findings || null,
+      status,
+      nextInspectionDate || null,
+      req.user.id,
+    ]
   );
 
-  // Update extinguisher last/next inspection dates and status
-  const newExtStatus = status === 'Failed'
-    ? 'pending_inspection'
-    : status === 'Requires Service'
-      ? 'pending_inspection'
-      : 'active';
-
-  await db.query(
-    `UPDATE extinguishers SET
-       last_inspection_date = $1,
-       next_inspection_date = COALESCE($2, next_inspection_date),
-       status = $3
-     WHERE id = $4`,
-    [inspectionDate, nextInspectionDate || null, newExtStatus, extinguisherId]
-  );
+  if (status !== 'Scheduled') {
+    const extinguisherStatus = status === 'Completed' ? 'active' : 'pending_inspection';
+    await db.query(
+      `UPDATE extinguishers SET
+         last_inspection_date = $1,
+         next_inspection_date = COALESCE($2, next_inspection_date),
+         status = $3
+       WHERE id = $4`,
+      [inspectionDate, nextInspectionDate || null, extinguisherStatus, extinguisherId]
+    );
+  } else if (nextInspectionDate) {
+    await db.query(
+      `UPDATE extinguishers SET next_inspection_date = $1, status = 'pending_inspection' WHERE id = $2`,
+      [nextInspectionDate, extinguisherId]
+    );
+  }
 
   await db.query(
     `INSERT INTO audit_logs (user_id, user_email, action, entity_type, entity_id, new_values)
      VALUES ($1,$2,'CREATE_INSPECTION','inspection',$3,$4)`,
-    [req.user.id, req.user.email, result.rows[0].id,
-      JSON.stringify({ extinguisherId, status, inspectionDate })]
+    [req.user.id, req.user.email, result.rows[0].id, JSON.stringify(value)]
   );
 
   res.status(201).json({
     success: true,
-    message: 'Inspection recorded successfully',
+    message: status === 'Scheduled' ? 'Inspection scheduled successfully' : 'Inspection recorded successfully',
     data: formatInspection(result.rows[0]),
   });
 });
 
-// GET / — List inspections
 router.get('/', authenticate, async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
   const offset = (page - 1) * limit;
   const extinguisherId = req.query.extinguisherId || '';
   const status = req.query.status || '';
 
-  const validStatuses = ['Passed', 'Requires Service', 'Failed'];
-  if (status && !validStatuses.includes(status)) {
-    return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  if (status && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
   }
 
   let where = 'WHERE 1=1';
@@ -174,10 +181,13 @@ router.get('/', authenticate, async (req, res) => {
     params.push(extinguisherId);
     where += ` AND i.extinguisher_id = $${params.length}`;
   }
-  if (status) { params.push(status); where += ` AND i.status = $${params.length}`; }
+  if (status) {
+    params.push(status);
+    where += ` AND i.status = $${params.length}`;
+  }
 
   const countRes = await db.query(`SELECT COUNT(*) FROM inspections i ${where}`, params);
-  const total = parseInt(countRes.rows[0].count);
+  const total = parseInt(countRes.rows[0].count, 10);
 
   params.push(limit, offset);
   const result = await db.query(
@@ -185,7 +195,7 @@ router.get('/', authenticate, async (req, res) => {
      FROM inspections i
      JOIN extinguishers e ON e.id = i.extinguisher_id
      ${where}
-     ORDER BY i.inspection_date DESC
+     ORDER BY i.inspection_date DESC, i.inspection_time DESC NULLS LAST
      LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
@@ -197,7 +207,6 @@ router.get('/', authenticate, async (req, res) => {
   });
 });
 
-// GET /:id
 router.get('/:id', authenticate, async (req, res) => {
   if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
     return res.status(400).json({ success: false, message: 'Invalid inspection ID format' });
@@ -205,29 +214,17 @@ router.get('/:id', authenticate, async (req, res) => {
 
   const result = await db.query(
     `SELECT i.*, e.extinguisher_code
-     FROM inspections i JOIN extinguishers e ON e.id = i.extinguisher_id
+     FROM inspections i
+     JOIN extinguishers e ON e.id = i.extinguisher_id
      WHERE i.id = $1`,
     [req.params.id]
   );
+
   if (result.rows.length === 0) {
     return res.status(404).json({ success: false, message: 'Inspection not found' });
   }
+
   res.json({ success: true, data: formatInspection(result.rows[0]) });
 });
-
-function formatInspection(i) {
-  return {
-    id: i.id,
-    extinguisherId: i.extinguisher_id,
-    extinguisherCode: i.extinguisher_code,
-    inspectorId: i.inspector_id,
-    inspectorName: i.inspector_name,
-    inspectionDate: i.inspection_date,
-    findings: i.findings,
-    status: i.status,
-    nextInspectionDate: i.next_inspection_date,
-    createdAt: i.created_at,
-  };
-}
 
 module.exports = router;

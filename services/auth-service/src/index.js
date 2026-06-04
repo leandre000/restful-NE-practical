@@ -1,7 +1,7 @@
 require('dotenv').config();
 require('express-async-errors');
 const express = require('express');
-const cors = require('cors');
+// cors required removed
 const helmet = require('helmet');
 const morgan = require('morgan');
 const authRoutes = require('./routes/auth.routes');
@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 app.use(helmet());
-app.use(cors({ origin: '*', credentials: true }));
+// CORS removed (handled by gateway)
 app.use(morgan('dev'));
 app.use(express.json());
 

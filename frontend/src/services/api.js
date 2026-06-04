@@ -32,7 +32,10 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
+  logout: () => api.post('/auth/logout'),
+  validate: () => api.get('/auth/validate'),
   me: () => api.get('/auth/me'),
+  updateProfile: (data) => api.patch('/auth/profile', data),
   getUsers: (params) => api.get('/auth/users', { params }),
   toggleUser: (id) => api.patch(`/auth/users/${id}/toggle`),
   updateRole: (id, role) => api.patch(`/auth/users/${id}/role`, { role }),
@@ -85,11 +88,14 @@ export const reportAPI = {
   expiringSoon: (params) => api.get('/reports/expiring-soon', { params }),
   customers: (params) => api.get('/reports/customers', { params }),
   inspections: (params) => api.get('/reports/inspections', { params }),
+  inspectionStatusSummary: () => api.get('/reports/inspections/status-summary'),
   maintenance: (params) => api.get('/reports/maintenance', { params }),
+  maintenanceFrequency: () => api.get('/reports/maintenance/frequency'),
   compliance: (params) => api.get('/reports/compliance', { params }),
+  inventorySummary: () => api.get('/reports/inventory/summary'),
   audit: (params) => api.get('/reports/audit', { params }),
   summary: () => api.get('/reports/summary'),
-  downloadCsv: (type, params) => api.get(`/reports/${type}`, { params: { ...params, format: 'csv' }, responseType: 'blob' }),
+  downloadReport: (type, format, params) => api.get(`/reports/${type}`, { params: { ...params, format }, responseType: 'blob' }),
 };
 
 export default api;

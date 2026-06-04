@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -21,7 +21,7 @@ const ProtectedRoute = ({ children, adminOnly }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading-full"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && user.role !== 'admin' && user.role !== 'safety_officer') {
+  if (adminOnly && user.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
   }
   return children;
@@ -36,23 +36,21 @@ const PublicRoute = ({ children }) => {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public auth routes */}
-      <Route path="/login"          element={<PublicRoute><LoginPage /></PublicRoute>} />
-      <Route path="/register"       element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
-      <Route path="/reset-password"  element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
+      <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
 
-      {/* Protected app routes */}
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard"     element={<DashboardPage />} />
-        <Route path="customers"     element={<CustomersPage />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="customers" element={<CustomersPage />} />
         <Route path="extinguishers" element={<ExtinguishersPage />} />
-        <Route path="inspections"   element={<InspectionsPage />} />
-        <Route path="maintenance"   element={<MaintenancePage />} />
-        <Route path="reports"       element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
-        <Route path="escalations"   element={<ProtectedRoute adminOnly><EscalationsPage /></ProtectedRoute>} />
-        <Route path="users"         element={<ProtectedRoute adminOnly><UsersPage /></ProtectedRoute>} />
+        <Route path="inspections" element={<InspectionsPage />} />
+        <Route path="maintenance" element={<MaintenancePage />} />
+        <Route path="reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
+        <Route path="escalations" element={<ProtectedRoute adminOnly><EscalationsPage /></ProtectedRoute>} />
+        <Route path="users" element={<ProtectedRoute adminOnly><UsersPage /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -70,14 +68,15 @@ export default function App() {
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#0f172a',
-              color: '#f1f5f9',
-              border: '1px solid #1e293b',
-              borderRadius: '10px',
+              background: '#FFFFFF',
+              color: '#0F172A',
+              border: '1px solid #E2E8F0',
+              borderRadius: '14px',
               fontSize: '13px',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)'
             },
-            success: { iconTheme: { primary: '#4ade80', secondary: '#0f172a' } },
-            error: { iconTheme: { primary: '#f87171', secondary: '#0f172a' } },
+            success: { iconTheme: { primary: '#10B981', secondary: '#FFFFFF' } },
+            error: { iconTheme: { primary: '#EF4444', secondary: '#FFFFFF' } },
           }}
         />
       </BrowserRouter>

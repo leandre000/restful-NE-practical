@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -10,15 +10,24 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('femcs_token');
     const stored = localStorage.getItem('femcs_user');
-    if (token && stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
+    if (!token || !stored) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(stored);
+      setUser(parsedUser);
+      authAPI.validate().catch(() => {
         localStorage.removeItem('femcs_token');
         localStorage.removeItem('femcs_user');
-      }
+        setUser(null);
+      }).finally(() => setLoading(false));
+    } catch {
+      localStorage.removeItem('femcs_token');
+      localStorage.removeItem('femcs_user');
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = (userData, token) => {
@@ -27,7 +36,10 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+    } catch {}
     localStorage.removeItem('femcs_token');
     localStorage.removeItem('femcs_user');
     setUser(null);
@@ -39,9 +51,11 @@ export const AuthProvider = ({ children }) => {
       loading,
       login,
       logout,
+      setUser,
       isAdmin: user?.role === 'admin',
-      isSafetyOfficer: user?.role === 'safety_officer',
-    }}>
+      isInspector: user?.role === 'inspector',
+    }}
+    >
       {children}
     </AuthContext.Provider>
   );

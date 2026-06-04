@@ -1,6 +1,4 @@
 # ── Environment variables — never commit these ────────────────────────────
-.env
-**/.env
 services/**/.env
 api-gateway/.env
 frontend/.env
@@ -25,7 +23,6 @@ frontend/build/
 # ── OS / Editor ───────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-.vscode/settings.json
 *.swp
 *.swo
 
@@ -33,3 +30,4 @@ Thumbs.db
 # keep docker-compose.yml and Dockerfiles in source control
 # ignore override files with local secrets
 docker-compose.override.yml
+config.bat

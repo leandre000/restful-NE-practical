@@ -1,406 +1,421 @@
 openapi: 3.0.0
 info:
-  title: FEMCS API
-  description: Fire Extinguisher Management and Compliance System
+  title: 'Fire Extinguisher Management System API'
   version: 1.0.0
+  description: 'RESTful microservices API for fire extinguisher registration, inspection scheduling, maintenance logging, authentication, and reporting.'
 servers:
-  - url: http://localhost:5000/api
-    description: Local API Gateway
-
+  -
+    url: 'http://localhost:5000/api'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  schemas:
-    Error:
-      type: object
-      properties:
-        success: { type: boolean, example: false }
-        message: { type: string }
-
 security:
-  - bearerAuth: []
-
+  -
+    bearerAuth: []
 paths:
   /auth/register:
     post:
-      tags: [Auth]
-      summary: Register a new user
+      tags:
+        - Auth
       security: []
+      summary: 'Register a user'
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              type: object
-              required: [firstName, lastName, email, password]
-              properties:
-                firstName: { type: string }
-                lastName: { type: string }
-                email: { type: string, format: email }
-                password: { type: string, minLength: 8 }
-                role: { type: string, enum: [admin, technician, inspector, safety_officer] }
-      responses:
-        '201': { description: User registered }
-        '409': { description: Email already registered }
-
+          application/json: {schema: {type: object, properties: {firstName: {type: string, example: Admin}, lastName: {type: string, example: User}, email: {type: string, example: admin@femcs.rw}, password: {type: string, example: Admin@1234}, role: {type: string, example: admin}}}}
   /auth/login:
     post:
-      tags: [Auth]
-      summary: Login
+      tags:
+        - Auth
       security: []
+      summary: 'Login and receive a JWT'
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              type: object
-              required: [email, password]
-              properties:
-                email: { type: string }
-                password: { type: string }
-      responses:
-        '200': { description: Login successful, returns JWT token }
-        '401': { description: Invalid credentials }
-
+          application/json: {schema: {type: object, properties: {email: {type: string, example: admin@femcs.rw}, password: {type: string, example: Admin@1234}}}}
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: 'Logout the current user'
+  /auth/validate:
+    get:
+      tags:
+        - Auth
+      summary: 'Validate the current JWT'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
   /auth/me:
     get:
-      tags: [Auth]
-      summary: Get current user
-      responses:
-        '200': { description: Current user data }
-
+      tags:
+        - Auth
+      summary: 'Get the current user profile'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /auth/profile:
+    patch:
+      tags:
+        - Auth
+      summary: 'Update the current user profile'
+  /auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      security: []
+      summary: 'Request a password reset OTP'
+  /auth/reset-password:
+    post:
+      tags:
+        - Auth
+      security: []
+      summary: 'Reset password with OTP'
+  /auth/change-password:
+    post:
+      tags:
+        - Auth
+      summary: 'Change the current password'
   /auth/users:
     get:
-      tags: [Auth]
-      summary: List all users (admin only)
+      tags:
+        - Auth
+      summary: 'List users'
       parameters:
-        - in: query
+        -
+          in: query
           name: page
-          schema: { type: integer }
-        - in: query
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
           name: limit
-          schema: { type: integer }
-        - in: query
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+        -
+          in: query
           name: search
-          schema: { type: string }
-      responses:
-        '200': { description: List of users }
-
-  /customers:
-    get:
-      tags: [Customers]
-      summary: List customers
-      parameters:
-        - in: query
-          name: page
-          schema: { type: integer }
-        - in: query
-          name: search
-          schema: { type: string }
-      responses:
-        '200': { description: List of customers }
-    post:
-      tags: [Customers]
-      summary: Create customer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [fullName, phone]
-              properties:
-                fullName: { type: string }
-                nationalId: { type: string }
-                phone: { type: string }
-                email: { type: string }
-                address: { type: string }
-                organizationName: { type: string }
-      responses:
-        '201': { description: Customer created }
-
-  /customers/{id}:
-    get:
-      tags: [Customers]
-      summary: Get customer by ID
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200': { description: Customer data }
-    put:
-      tags: [Customers]
-      summary: Update customer
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200': { description: Customer updated }
-    delete:
-      tags: [Customers]
-      summary: Delete customer (admin only)
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200': { description: Customer deleted }
-
+          schema: {type: string}
+          description: 'Search term'
   /extinguishers:
     get:
-      tags: [Extinguishers]
-      summary: List extinguishers
+      tags:
+        - Extinguishers
+      summary: 'List extinguishers'
       parameters:
-        - in: query
+        -
+          in: query
           name: page
-          schema: { type: integer }
-        - in: query
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+        -
+          in: query
           name: search
-          schema: { type: string }
-        - in: query
-          name: status
-          schema: { type: string, enum: [active, expired, serviced, decommissioned, pending_inspection] }
-        - in: query
-          name: type
-          schema: { type: string, enum: [CO2, Dry Powder, Foam, Water] }
-        - in: query
-          name: compliance
-          schema: { type: string, enum: [compliant, warning, critical, non_compliant] }
-      responses:
-        '200': { description: List of extinguishers }
+          schema: {type: string}
+          description: 'Search term'
     post:
-      tags: [Extinguishers]
-      summary: Register extinguisher
+      tags:
+        - Extinguishers
+      summary: 'Register a fire extinguisher'
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              type: object
-              required: [serialNumber, type, capacityLiters, manufactureDate, purchaseDate, expiryDate, location, customerId]
-              properties:
-                serialNumber: { type: string }
-                type: { type: string, enum: [CO2, Dry Powder, Foam, Water] }
-                capacityLiters: { type: number }
-                manufactureDate: { type: string, format: date }
-                purchaseDate: { type: string, format: date }
-                expiryDate: { type: string, format: date }
-                location: { type: string }
-                customerId: { type: string, format: uuid }
-      responses:
-        '201': { description: Extinguisher registered }
-
+          application/json: {schema: {type: object, properties: {serialNumber: {type: string, example: EXT-999}, type: {type: string, example: CO2}, weight: {type: string, example: 5kg}, locationId: {type: integer, example: 1}, manufactureDate: {type: string, example: '2023-01-01'}, expiryDate: {type: string, example: '2028-01-01'}}}}
   /extinguishers/stats:
     get:
-      tags: [Extinguishers]
-      summary: Inventory statistics
-      responses:
-        '200': { description: Inventory stats }
-
-  /extinguishers/{id}:
+      tags:
+        - Extinguishers
+      summary: 'Inventory statistics'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+        -
+          in: query
+          name: search
+          schema: {type: string}
+          description: 'Search term'
+  '/extinguishers/{id}':
     get:
-      tags: [Extinguishers]
-      summary: Get extinguisher
+      tags:
+        - Extinguishers
+      summary: 'Get extinguisher details'
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200': { description: Extinguisher data }
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+        -
+          in: query
+          name: search
+          schema: {type: string}
+          description: 'Search term'
     put:
-      tags: [Extinguishers]
-      summary: Update extinguisher
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200': { description: Updated }
+      tags:
+        - Extinguishers
+      summary: 'Update extinguisher details'
     delete:
-      tags: [Extinguishers]
-      summary: Remove extinguisher (admin only)
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200': { description: Removed }
-
+      tags:
+        - Extinguishers
+      summary: 'Delete an extinguisher'
   /inspections:
     get:
-      tags: [Inspections]
-      summary: List inspections
-      responses:
-        '200': { description: List of inspections }
+      tags:
+        - Inspections
+      summary: 'List inspections'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
     post:
-      tags: [Inspections]
-      summary: Record inspection
+      tags:
+        - Inspections
+      summary: 'Schedule or record an inspection'
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              type: object
-              required: [extinguisherId, inspectorName, inspectionDate, status]
-              properties:
-                extinguisherId: { type: string, format: uuid }
-                inspectorName: { type: string }
-                inspectionDate: { type: string, format: date }
-                findings: { type: string }
-                status: { type: string, enum: [Passed, Requires Service, Failed] }
-                nextInspectionDate: { type: string, format: date }
-      responses:
-        '201': { description: Inspection recorded }
-
+          application/json: {schema: {type: object, properties: {extinguisherId: {type: integer, example: 1}, inspectorId: {type: integer, example: 1}, status: {type: string, example: passed}, notes: {type: string, example: 'Passed inspection.'}}}}
   /maintenance:
     get:
-      tags: [Maintenance]
-      summary: List maintenance records
-      responses:
-        '200': { description: List of maintenance records }
+      tags:
+        - Maintenance
+      summary: 'List maintenance records'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
     post:
-      tags: [Maintenance]
-      summary: Create maintenance record
+      tags:
+        - Maintenance
+      summary: 'Create a maintenance record'
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              type: object
-              required: [extinguisherId, serviceDate, serviceCompany, technicianName]
-              properties:
-                extinguisherId: { type: string, format: uuid }
-                serviceDate: { type: string, format: date }
-                serviceCompany: { type: string }
-                technicianName: { type: string }
-                nextServiceDate: { type: string, format: date }
-                cost: { type: number }
-                description: { type: string }
-                status: { type: string, enum: [scheduled, in_progress, completed, cancelled] }
-      responses:
-        '201': { description: Maintenance record created }
-
-  /notifications:
-    get:
-      tags: [Notifications]
-      summary: Get notifications for current user
-      parameters:
-        - in: query
-          name: unread
-          schema: { type: boolean }
-        - in: query
-          name: type
-          schema: { type: string }
-      responses:
-        '200': { description: Notifications list with unread count }
-
-  /notifications/{id}/read:
-    patch:
-      tags: [Notifications]
-      summary: Mark notification as read
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200': { description: Marked as read }
-
-  /notifications/read-all:
-    patch:
-      tags: [Notifications]
-      summary: Mark all notifications as read
-      responses:
-        '200': { description: All marked as read }
-
-  /notifications/escalations:
-    get:
-      tags: [Notifications]
-      summary: List escalations (admin/safety_officer)
-      responses:
-        '200': { description: Escalations list }
-
-  /notifications/trigger-check:
-    post:
-      tags: [Notifications]
-      summary: Manually trigger expiry check (admin only)
-      responses:
-        '200': { description: Check triggered }
-
+          application/json: {schema: {type: object, properties: {extinguisherId: {type: integer, example: 1}, actionTaken: {type: string, example: Refilled}, performedBy: {type: integer, example: 1}, cost: {type: number, example: 50}}}}
   /reports/expired:
     get:
-      tags: [Reports]
-      summary: Expired extinguishers report
+      tags:
+        - Reports
+      summary: 'Expired extinguishers report'
       parameters:
-        - in: query
-          name: format
-          schema: { type: string, enum: [json, csv] }
-      responses:
-        '200': { description: Report data }
-
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
   /reports/expiring-soon:
     get:
-      tags: [Reports]
-      summary: Expiring soon report
+      tags:
+        - Reports
+      summary: 'Upcoming expirations report'
       parameters:
-        - in: query
-          name: days
-          schema: { type: integer, default: 90 }
-        - in: query
-          name: format
-          schema: { type: string, enum: [json, csv] }
-      responses:
-        '200': { description: Report data }
-
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /reports/customers:
+    get:
+      tags:
+        - Reports
+      summary: 'Facility report'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /reports/inspections:
+    get:
+      tags:
+        - Reports
+      summary: 'Inspection report'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /reports/inspections/status-summary:
+    get:
+      tags:
+        - Reports
+      summary: 'Pending, completed and overdue inspection totals'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /reports/maintenance:
+    get:
+      tags:
+        - Reports
+      summary: 'Maintenance report'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /reports/maintenance/frequency:
+    get:
+      tags:
+        - Reports
+      summary: 'Maintenance frequency report'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
   /reports/compliance:
     get:
-      tags: [Reports]
-      summary: Compliance report
+      tags:
+        - Reports
+      summary: 'Compliance report'
       parameters:
-        - in: query
-          name: format
-          schema: { type: string, enum: [json, csv] }
-      responses:
-        '200': { description: Compliance data }
-
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
+  /reports/inventory/summary:
+    get:
+      tags:
+        - Reports
+      summary: 'Daily, monthly and yearly inventory summary'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
   /reports/summary:
     get:
-      tags: [Reports]
-      summary: Dashboard summary statistics
-      responses:
-        '200': { description: Summary stats }
-
+      tags:
+        - Reports
+      summary: 'Dashboard summary'
+      parameters:
+        -
+          in: query
+          name: page
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'
   /reports/audit:
     get:
-      tags: [Reports]
-      summary: Audit trail (admin only)
+      tags:
+        - Reports
+      summary: 'Audit report'
       parameters:
-        - in: query
+        -
+          in: query
           name: page
-          schema: { type: integer }
-        - in: query
-          name: action
-          schema: { type: string }
-      responses:
-        '200': { description: Audit logs }
+          schema: {type: integer, default: 1}
+          description: 'Page number'
+        -
+          in: query
+          name: limit
+          schema: {type: integer, default: 10}
+          description: 'Number of items'

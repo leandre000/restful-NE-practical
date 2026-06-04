@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, UserCheck, UserX, Shield, X } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Search, Shield, UserCheck, UserX, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { format } from 'date-fns';
 import { authAPI } from '../services/api';
 import Pagination from '../components/Pagination';
-import { format } from 'date-fns';
 
-const ROLES = ['admin', 'technician', 'inspector', 'safety_officer'];
+const ROLES = ['admin', 'inspector', 'user'];
 
 function roleBadge(role) {
-  const map = { admin: 'badge-red', safety_officer: 'badge-orange', inspector: 'badge-cyan', technician: 'badge-green' };
-  return <span className={`badge ${map[role] || 'badge-gray'}`}>{role?.replace('_', ' ')}</span>;
+  const map = { admin: 'badge-red', inspector: 'badge-cyan', user: 'badge-green' };
+  return <span className={`badge ${map[role] || 'badge-gray'}`}>{role}</span>;
 }
 
 export default function UsersPage() {
@@ -28,8 +28,11 @@ export default function UsersPage() {
       const res = await authAPI.getUsers({ page, limit: 10, search });
       setUsers(res.data.data);
       setPagination(res.data.pagination);
-    } catch { toast.error('Failed to load users'); }
-    finally { setLoading(false); }
+    } catch {
+      toast.error('Failed to load users');
+    } finally {
+      setLoading(false);
+    }
   }, [page, search]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
@@ -39,7 +42,9 @@ export default function UsersPage() {
       await authAPI.toggleUser(user.id);
       toast.success(`User ${user.isActive ? 'deactivated' : 'activated'}`);
       fetchUsers();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed');
+    }
   };
 
   const handleRoleChange = async () => {
@@ -49,8 +54,11 @@ export default function UsersPage() {
       toast.success('Role updated');
       setRoleModal(null);
       fetchUsers();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
-    finally { setSaving(false); }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -62,7 +70,7 @@ export default function UsersPage() {
       <div className="search-bar">
         <div className="search-input-wrap">
           <Search size={15} />
-          <input className="form-control" placeholder="Search users…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+          <input className="form-control" placeholder="Search users..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
       </div>
 
@@ -76,27 +84,20 @@ export default function UsersPage() {
               <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40 }}><div className="spinner" /></td></tr>
             ) : users.length === 0 ? (
               <tr><td colSpan={6}><div className="empty-state"><h3>No users found</h3></div></td></tr>
-            ) : users.map(u => (
-              <tr key={u.id}>
-                <td><strong>{u.firstName} {u.lastName}</strong></td>
-                <td>{u.email}</td>
-                <td>{roleBadge(u.role)}</td>
-                <td><span className={`badge ${u.isActive ? 'badge-green' : 'badge-red'}`}>{u.isActive ? 'Active' : 'Inactive'}</span></td>
-                <td>{u.createdAt ? format(new Date(u.createdAt), 'dd MMM yyyy') : '—'}</td>
+            ) : users.map((user) => (
+              <tr key={user.id}>
+                <td><strong>{user.firstName} {user.lastName}</strong></td>
+                <td>{user.email}</td>
+                <td>{roleBadge(user.role)}</td>
+                <td><span className={`badge ${user.isActive ? 'badge-green' : 'badge-red'}`}>{user.isActive ? 'Active' : 'Inactive'}</span></td>
+                <td>{user.createdAt ? format(new Date(user.createdAt), 'dd MMM yyyy') : '-'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-success'}`}
-                      onClick={() => handleToggle(u)}
-                      title={u.isActive ? 'Deactivate' : 'Activate'}
-                    >
-                      {u.isActive ? <UserX size={13} /> : <UserCheck size={13} />}
-                      {u.isActive ? 'Deactivate' : 'Activate'}
+                    <button className={`btn btn-sm ${user.isActive ? 'btn-danger' : 'btn-success'}`} onClick={() => handleToggle(user)}>
+                      {user.isActive ? <UserX size={13} /> : <UserCheck size={13} />}
+                      {user.isActive ? 'Deactivate' : 'Activate'}
                     </button>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => { setRoleModal(u); setNewRole(u.role); }}
-                    >
+                    <button className="btn btn-sm btn-secondary" onClick={() => { setRoleModal(user); setNewRole(user.role); }}>
                       <Shield size={13} /> Role
                     </button>
                   </div>
@@ -110,7 +111,7 @@ export default function UsersPage() {
 
       {roleModal && (
         <div className="modal-overlay" onClick={() => setRoleModal(null)}>
-          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Change Role</h3>
               <button className="btn-icon" onClick={() => setRoleModal(null)}><X size={16} /></button>
@@ -121,15 +122,15 @@ export default function UsersPage() {
               </p>
               <div className="form-group">
                 <label className="form-label">New Role</label>
-                <select className="form-control" value={newRole} onChange={e => setNewRole(e.target.value)}>
-                  {ROLES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+                <select className="form-control" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                  {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
                 </select>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setRoleModal(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleRoleChange} disabled={saving || newRole === roleModal.role}>
-                {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Update Role'}
+                {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : 'Update Role'}
               </button>
             </div>
           </div>

@@ -1,27 +1,31 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+function getMailConfig() {
+  return {
+    host: process.env.MAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.MAIL_PORT || process.env.SMTP_PORT || '587', 10),
+    secure: (process.env.MAIL_SECURE || process.env.SMTP_SECURE) === 'true',
+    auth: {
+      user: process.env.MAIL_USERNAME || process.env.SMTP_USER,
+      pass: process.env.MAIL_PASSWORD || process.env.SMTP_PASS,
+    },
+  };
+}
 
 async function sendEmail({ to, subject, html }) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[Mailer] SMTP credentials not configured — skipping email send.');
+  const config = getMailConfig();
+  if (!config.auth.user || !config.auth.pass) {
+    console.warn('[Mailer] Mail credentials not configured - skipping email send.');
     return { skipped: true };
   }
-  const info = await transporter.sendMail({
-    from: process.env.EMAIL_FROM || 'FEMCS System <noreply@femcs.rw>',
+
+  const transporter = nodemailer.createTransport(config);
+  return transporter.sendMail({
+    from: process.env.EMAIL_FROM || 'Fire Extinguisher System <noreply@fems.local>',
     to,
     subject,
     html,
   });
-  return info;
 }
 
 module.exports = { sendEmail };
